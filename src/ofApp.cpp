@@ -1,53 +1,84 @@
 #include <sstream>
 #include "ofApp.h"
+#include <string>
+
+
+void allocateShader(ofxShaderFilter* shader, string shader_name) {
+  shader->allocate(ofGetWidth(), ofGetHeight());
+  shader->load(shader_name);
+}
+
+void allocateFbo(ofFbo* fbo, ofxShaderFilter* shader, string shader_name) {
+  fbo->allocate(ofGetWidth(), ofGetHeight());
+  fbo->begin();
+  ofClear(255);
+  allocateShader(shader, shader_name);
+  fbo->end();
+}
 
 //--------------------------------------------------------------
+
 void ofApp::setup(){
-  video.load("shiva.mp4");
+  midi.listInPorts();
+  midi.openPort(1);
+  midi.addListener(this);
+
+  video.load("bugs.mkv");
   video.setVolume(0.);
-  font.load("arcade.ttf", 50);
+  font.load("arcade.ttf", 70);
   ofDisableArbTex();
   ofSetWindowTitle("VJshader");
-  ofSetFrameRate(60);
+  ofSetFrameRate(120);
   ofSetVerticalSync(true);
-
-  fbo.allocate(ofGetWidth(), ofGetHeight());
-  fbo.begin();
-  ofClear(255);
-  shader.allocate(fbo.getWidth(), fbo.getHeight());
-  shader.load("shader.frag");
-  fbo.end();
+  allocateFbo(&videoFbo, &videoShader, "video.frag");
+  allocateShader(&sdfShader, "shader.frag");
   video.play();
 
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
-  fbo.begin();
+
+  this->printMidi();
+
   video.update();
-  shader.setUniform1f("u_frame", frame);
-  shader.setUniformTexture("fboTexture", fbo.getTextureReference(0));
-  shader.setUniformTexture("videoTexture", video.getTexture());
-  fbo.end();
-  
-  fbo.begin();
-  shader.render();
-  shader.draw(0, 0, ofGetWidth(), ofGetHeight());
+
+  videoFbo.begin();
+
+  sdfShader.setUniform1f("u_frame", frame);
+  videoShader.setUniform1f("u_frame", frame);
+
+  for(int i = 0; i < 16; i++) {
+    string name = "u_midi" + std::to_string(i);
+    //cout << name << " " << midi_args[i] << endl;
+    videoShader.setUniform1f(name, midi_args[i]);
+    sdfShader.setUniform1f(name, midi_args[i]);
+  }
+
+  sdfShader.render();
+
+  videoShader.setUniformTexture("videoTexture", video.getTexture());
+  videoShader.setUniformTexture("sdfTexture", sdfShader.getTexture());
+
+  videoShader.draw(0, 0, ofGetWidth(), ofGetHeight());
+  videoShader.render();
+
   std::ostringstream ss;
   ss << frame;
-  ss << "♃";
   std::string s(ss.str());
   font.drawString(string(s), 100,100);
-  fbo.end();
+  videoFbo.end();
+
   frame += 1.;
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
-  fbo.getTextureReference().bind();
-  fbo.getTextureReference().getTextureData().bFlipTexture = true;
-  fbo.draw(0, 0);
-  fbo.unbind();
+  videoFbo.getTextureReference().bind();
+  videoFbo.getTextureReference().getTextureData().bFlipTexture = true;
+  videoFbo.draw(0, 0);
+  videoFbo.unbind();
+
 }
 
 //--------------------------------------------------------------
@@ -63,47 +94,41 @@ void ofApp::keyReleased(int key){
 }
 
 //--------------------------------------------------------------
-void ofApp::mouseMoved(int x, int y ){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseDragged(int x, int y, int button){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mousePressed(int x, int y, int button){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseReleased(int x, int y, int button){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseEntered(int x, int y){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseExited(int x, int y){
-
-}
-
-//--------------------------------------------------------------
 void ofApp::windowResized(int w, int h){
-  shader.allocate(w, h);
-  fbo.allocate(w, h);
+  videoShader.allocate(w, h);
+  videoFbo.allocate(w, h);
+}
+//--------------------------------------------------------------
+void ofApp::newMidiMessage(ofxMidiMessage &message) {
+  mu.lock();
+  messages.push_back(message);
+  mu.unlock();
+
 }
 
 //--------------------------------------------------------------
-void ofApp::gotMessage(ofMessage msg){
 
+void ofApp::printMidi() {
+
+  mu.lock();
+  while (int(messages.size()) > 33) {
+    messages.erase(messages.begin());
+  }
+  for(int i = 0; i < int(messages.size()); i++ ) {
+    ofxMidiMessage &message = messages[i];
+    midi_args[message.control] = float(message.value) / float(127);
+    //cout << message.control << message.value << endl;
+    messages.erase(messages.begin());
+  }
+  mu.unlock();
 }
+
 
 //--------------------------------------------------------------
-void ofApp::dragEvent(ofDragInfo dragInfo){ 
 
+void ofApp::exit() {
+  midi.closePort();
+  midi.removeListener(this);
+  video.stop();
 }
+

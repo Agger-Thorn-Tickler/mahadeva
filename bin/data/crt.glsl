@@ -8,6 +8,7 @@ vec2 curve(vec2 uv)
   uv =  uv *0.92 + 0.04;
   return uv;
 }
+
 vec4 crt(sampler2D chan, vec2 uv)
 {
   uv = curve( uv );
@@ -24,7 +25,7 @@ vec4 crt(sampler2D chan, vec2 uv)
 
   col = clamp(col*0.6+0.4*col*col*1.0,0.0,1.0);
 
-  float vig = (0.0 + 1.0*16.0*uv.x*uv.y*(1.0-uv.x)*(1.0-uv.y));
+  float vig = (1/u_frame + 1.0*16.0*uv.x*uv.y*(1.0-uv.x)*(1.0-uv.y));
   col *= vec3(pow(vig,0.3));
 
   col *= vec3(0.95,1.05,0.95);

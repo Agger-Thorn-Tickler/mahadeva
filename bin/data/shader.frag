@@ -1,17 +1,9 @@
 uniform vec2 u_resolution;
-uniform vec2 u_mouse;
 uniform float u_time;
-uniform sampler2D fboTexture;
-uniform sampler2D videoTexture;
+uniform float u_frame;
+uniform float u_midi4;
 
-#pragma include "crt.glsl"
 #pragma include "hg_sdf.glsl"
-
-/// "RayMarching starting point" 
-// by Martijn Steinrucken aka BigWings/CountFrolic - 2020
-// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
-// 
-// You can use this shader as a template for ray marching shaders
 
 #define MAX_STEPS 100
 #define MAX_DIST 100.
@@ -32,7 +24,13 @@ float Hash21(vec2 p) {
 }
 
 float GetDist(vec3 p) {
-    return fCone(p, 1., 2.);
+   //pR(p.xy, u_time);
+   //pR(p.xz, u_time);
+   pMod3(p, vec3(10. * u_midi4));
+   float v = fBox(p, vec3(.125, 1., .125));
+   p.xy = p.yx;
+   float c = fBox(p, vec3(.125, 1., .125));
+   return min(c, v);
 }
 
 float RayMarch(vec3 ro, vec3 rd) {
@@ -74,35 +72,23 @@ vec3 GetRayDir(vec2 uv, vec3 p, vec3 l, float z) {
 
 void main()
 {
-  vec2 fb = gl_FragCoord.xy/u_resolution.xy;
   vec2 uv = (gl_FragCoord.xy-.5*u_resolution.xy)/u_resolution.y;
 	vec2 m = vec2(abs(atan(u_time)), abs(atan(u_time)));
-    
     vec3 col = vec3(0);
-    
-    vec3 ro = vec3(0, 3, -3);
-    ro.yz *= Rot(-m.y*3.14+1.);
-    ro.xz *= Rot(-m.x*6.2831);
-    
+    vec3 ro = vec3(0, 3, u_frame * -.5);
+    //ro.yz *= Rot(-m.y*3.14+1.);
+    //ro.xz *= Rot(-m.x*6.2831);
     vec3 rd = GetRayDir(uv, ro, vec3(0), 1.);
 
     float d = RayMarch(ro, rd);
-    
     if(d<MAX_DIST) {
     	vec3 p = ro + rd * d;
     	vec3 n = GetNormal(p);
-        
     	float dif = dot(n, normalize(vec3(1,2,3)))*.5+.5;
-    	col += dif;  
+    	col += dif;
     }
-    
     col = pow(col, vec3(.4545));	// gamma correction
-    
-    vec4 tex2 = crt(videoTexture, fb);
-    fb.y = 1. - fb.y;
-    vec4 tex = crt(fboTexture, abs(sin(fb)));
-    tex *= vec4(atan(u_time), atan(u_time), atan(u_time), 1.);
-    vec3 mixed = mix(col, tex.xyz, mix(.4, .5, abs(cos(u_time))));
 
-    gl_FragColor = tex2 / vec4(mixed, 1.);
+    gl_FragColor = vec4(col, 1.);
+
 }
